@@ -23,7 +23,6 @@ static void freeCharArray(char **a, int size)
 	free(a[i]);
 	free(a);
 }
-
 */
 import "C"
 
@@ -74,21 +73,20 @@ type solcOutput struct {
 }
 
 // SolidityVersion runs solc and parses its version output.
-func SolidityVersion() (*Solidity, error) {
-	var stdout bytes.Buffer
-
+func SolidityVersion() (*Solidity) {
 	args := []string{"--version"}
 
-	callCSolc(args)
+	o, _, _ := callCSolc(args)
+
 	s := &Solidity{
-		FullVersion: stdout.String(),
-		Version:     versionRegexp.FindString(stdout.String()),
+		FullVersion: string(o),
+		Version:     versionRegexp.FindString(string(o)),
 	}
-	return s, nil
+	return s
 }
 
 // CompileSolidity compiles all given Solidity source files.
-func CompileSolidity(solc string, sourcefiles ...string) (map[string]*Contract, error) {
+func CompileSolidity(sourcefiles ...string) (map[string]*Contract, error) {
 	if len(sourcefiles) == 0 {
 		return nil, errors.New("solc: no source ")
 	}
@@ -97,19 +95,16 @@ func CompileSolidity(solc string, sourcefiles ...string) (map[string]*Contract, 
 		return nil, err
 	}
 
-	var stderr, stdout bytes.Buffer
 	args := append(solcParams, "--")
-	//os.Stdout = &stdout
-	//os.Stderr = &stderr
 
-	ok := callCSolc(append(args, sourcefiles...))
+	o, e, ok := callCSolc(append(args, sourcefiles...))
 
 	if !ok {
-		return nil, fmt.Errorf("solc: %v\n%s", err, stderr.Bytes())
+		return nil, fmt.Errorf("solc: %v\n%s", err, e)
 	}
 
 	var output solcOutput
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+	if err := json.Unmarshal(o, &output); err != nil {
 		return nil, err
 	}
 	shortVersion := versionRegexp.FindString(output.Version)
@@ -159,12 +154,16 @@ func slurpFiles(files []string) (string, error) {
 	return concat.String(), nil
 }
 
-func callCSolc(args[] string) bool {
+func callCSolc(args[] string) ([]byte, []byte, bool) {
+	args = append([]string {"solc"}, args...)
 	cargs := C.makeCharArray(C.int(len(args)))
 	defer C.freeCharArray(cargs, C.int(len(args)))
 	for i, s := range args {
 		C.setArrayString(cargs, C.CString(s), C.int(i))
 	}
 
-	return 0 == C.solc(len(args), cargs)
+	ok := C.solc(C.int(len(args)), cargs) == 0
+
+	return []byte{}, []byte{}, ok
+	//return o, e, ok || len(e) != 0
 }

@@ -1,2 +1,1 @@
-
-int solc(int argc, char** argv);
+int solc(int n, char** args);
